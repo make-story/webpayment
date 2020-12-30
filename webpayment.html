@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, width=device-width, minimal-ui" />
+<title>Web Payment</title>
+<!-- JS //-->
+<!-- https://github.com/GoogleChromeLabs/payment-request-shim -->
+<script src="https://storage.googleapis.com/prshim/v1/payment-shim.js"></script>
+</head>
+<body>
+<section>
+	<header>
+		<h2>Web Payment</h2>
+		<h3>Payment Request API</h3>
+	</header>
+	<article>
+		<button id="test">Buy 테스트</button>
+		<button id="start">결제</button>
+	</article>
+</section>
+
+<script>
+// https://www.w3.org/TR/payment-request/
+// https://developers.google.com/web/fundamentals/discovery-and-monetization/payment-request/?hl=ko
+// https://github.com/mdn/dom-examples/tree/master/payment-request
+
+// https 환경에서 동작
+function onBuyTest(event) {
+	if(!window.PaymentRequest) {
+		// Chrome 61.0 이상 지원
+		alert('Payment 미지원');
+		return;
+	}
+
+	console.dir(window.PaymentRequest);
+	var request = new PaymentRequest(
+		// methodData
+		[
+			/*{
+				supportedMethods: "basic-card",
+				data: {
+					supportedNetworks: ["visa", "mastercard"],
+					supportedTypes: ["debit", "credit"]
+				}
+			},
+			{
+				supportedMethods: "https://example.com/bobpay",
+				data: {
+					merchantIdentifier: "XXXX",
+					bobPaySpecificField: true
+				}
+			}*/
+			{
+				supportedMethods: ['visa', 'mastercard', 'amex', 'discover', 'maestro', 'diners', 'jcb', 'unionpay', 'bitcoin']
+			}
+		],
+		// details
+		{
+			//id: "super-store-order-123-12312",
+			displayItems: [
+				{
+					label: "Sub-total",
+					amount: { currency: "USD", value: "55.00" }
+				},
+				{
+					label: "Sales Tax",
+					amount: { currency: "USD", value: "5.00" }
+				},
+			],
+			total: {
+				label: "Total due",
+				amount: { currency: "USD", value: "65.00" }
+			}
+		},
+		// options
+		{
+			requestPayerEmail: false,
+			requestPayerName: true,
+			requestPayerPhone: false,
+			requestShipping: true
+		}
+	);
+	console.log(request);
+	/*request.show().then(function(paymentResponse) {
+		// Process paymentResponse here
+		paymentResponse.complete("success");
+	}).catch(function(err) {
+		console.error("Uh oh, something bad happened", err.message);
+	});*/
+};
+document.querySelector('#test').addEventListener('click', onBuyTest);
+
+function onBuyClicked(event) {
+	if(!window.PaymentRequest) {
+		// Chrome 61.0 이상 지원
+		alert('Payment 미지원');
+		return;
+	}
+
+	event.preventDefault();
+
+	// 지원되는 결제 방법 목록
+	var methodData = [
+		{
+			supportedMethods: ['visa', 'mastercard', 'amex', 'discover', 'maestro', 'diners', 'jcb', 'unionpay', 'bitcoin']
+		}
+	];
+
+	// 트랜잭션에 대한 정보
+	var details = {
+		// 부과되는 총 금액과 통화
+		total: {
+			label: "Total",
+			amount: { currency: "USD", value : "55.00" }, // US$55.00
+		},
+		// 최종 금액이 어떻게 계산되는지 (소계, 할인, 세금, 배송비 등에 대한 요약)
+		displayItems: [
+			{
+				label: "Original donation amount",
+				amount: { currency: "USD", value : "65.00" }, // US$65.00
+			},
+			{
+				label: "Friends and family discount",
+				amount: { currency: "USD", value : "-10.00" }, // -US$10.00
+				pending: true // 배송 주소나 배소 옵션의 선택에 따라 배송 또는 과세 금액과 같은 항목을 표시하기 위해 흔히 사용
+			}
+		],
+		// 배송 옵션(예: '무료', '표준' 또는 '특급')
+		shippingOptions: [
+			{
+				id: 'standard',
+				label: 'Standard shipping',
+				amount: {currency: 'USD', value: '0.00'},
+				selected: true
+			},
+			{
+				id: 'express',
+				label: 'Express shipping',
+				amount: {currency: 'USD', value: '12.00'}
+			}
+		]
+	};
+
+	// 옵션 (배송 주소 수집)
+	var options = {
+		// 배송 주소를 수집하기
+		requestShipping: true,
+		shippingType: "shipping", // "shipping"(default), "delivery" or "pickup"
+		// 사용자의 이메일 주소, 전화번호 또는 이름을 수집
+		requestPayerPhone: true,  // Request user's phone number
+		requestPayerEmail: true,  // Request user's email address
+		requestPayerName:  true   // Request user's name
+	};
+
+	// Initialization
+	console.dir(PaymentRequest);
+	var request = new PaymentRequest(
+		methodData, // required payment method data
+		details, // required information about transaction
+		options // optional parameter for things like shipping, etc.
+	);
+
+	// 사용자가 배송 주소를 선택하면 발생하는 shippingaddresschange 이벤트
+	request.addEventListener('shippingaddresschange', e => {
+		e.updateWith(((details, addr) => {
+			var shippingOption = {
+				id: '',
+				label: '',
+				amount: { currency: 'USD', value: '0.00' },
+				selected: true
+			};
+			// Shipping to US is supported
+			if (addr.country === 'US') {
+				shippingOption.id = 'us';
+				shippingOption.label = 'Standard shipping in US';
+				shippingOption.amount.value = '0.00';
+				details.total.amount.value = '55.00';
+			// Shipping to JP is supported
+			} else if (addr.country === 'JP') {
+				shippingOption.id = 'jp';
+				shippingOption.label = 'International shipping';
+				shippingOption.amount.value = '10.00';
+				details.total.amount.value = '65.00';
+			// Shipping to elsewhere is unsupported
+			} else {
+				// Empty array indicates rejection of the address
+				details.shippingOptions = [];
+				return Promise.resolve(details);
+			}
+			// Hardcode for simplicity
+			if (details.displayItems.length === 2) {
+				details.displayItems[2] = shippingOption;
+			} else {
+				details.displayItems.push(shippingOption);
+			}
+			details.shippingOptions = [shippingOption];
+
+			return Promise.resolve(details);
+		})(details, request.shippingAddress));
+	});
+
+	// 배송 옵션을 변경하면 가격이 달라질 수 있습니다. 배송비를 더하여 총 가격을 변경하려면 사용자가 배송 옵션을 선택하면 발생하는 shippingoptionchange 이벤트
+	request.addEventListener('shippingoptionchange', e => {
+		e.updateWith(((details, shippingOption) => {
+			var selectedShippingOption;
+			var otherShippingOption;
+			if (shippingOption === 'standard') {
+				selectedShippingOption = details.shippingOptions[0];
+				otherShippingOption = details.shippingOptions[1];
+				details.total.amount.value = '55.00';
+			} else {
+				selectedShippingOption = details.shippingOptions[1];
+				otherShippingOption = details.shippingOptions[0];
+				details.total.amount.value = '67.00';
+			}
+			if (details.displayItems.length === 2) {
+				details.displayItems.splice(1, 0, selectedShippingOption);
+			} else {
+				details.displayItems.splice(1, 1, selectedShippingOption);
+			}
+			selectedShippingOption.selected = true;
+			otherShippingOption.selected = false;
+			return Promise.resolve(details);
+		})(details, request.shippingOption));
+	});
+
+	// 결제 요청 (사용자가 구매 정보를 검토하고, 정보를 추가 또는 변경하고, 최종적으로 결제할 수 있도록 지원하는 기본 UI를 호출)
+	/*request.show().then(function(paymentResponse) { // Promise
+		// Process paymentResponse here
+		paymentResponse.complete("success");
+	}).catch(function(err) {
+		console.error("Uh oh, something bad happened", err.message);
+	});*/
+	request.show().then(paymentResponse => {
+		/*
+		PaymentResponse 처리
+		사용자가 결제 요청을 승인하면 show() 메서드의 프라미스가 이를 확인하고 PaymentResponse 객체가 반환
+		신용카드 결제의 경우, 응답은 표준화되어 있습니다. 비신용카드 결제의 경우(예: Android Pay), 응답은 제공업체가 지정
+
+		methodName: 선택한 결제 방법이 무엇인지를 나타내는 문자열(예: visa)
+		details: methodName 의 정보를 포함하는 사전
+		shippingAddress: 사용자의 배송 주소(요청된 경우)
+		shippingOption: 선택한 배송 옵션의 ID(요청된 경우)
+		payerEmail: 결제자의 이메일 주소(요청된 경우)
+		payerPhone: 결제자의 전화번호(요청된 경우)
+		payerName: 결제자의 이름(요청된 경우)
+		*/
+
+		// 결제 정보를 수령하면 앱이 처리를 위해 결제 정보를 결제 프로세서에 제출해야 합니다. 
+		// UI에서는 요청이 처리되는 동안 스피너를 표시합니다. 응답이 돌아오면 앱이 complete()를 호출하여 UI를 닫아야 합니다.
+		var paymentData = {
+			// payment method string, e.g. “visa”
+			method: paymentResponse.methodName,
+			// payment details as you requested
+			details: paymentResponse.details.toJSON(),
+			// shipping address information
+			address: paymentResponse.shippingAddress.toJSON(),
+			// shipping option
+			shippingOption: paymentResponse.shippingOption,
+			// payer's phone number string
+			phone: paymentResponse.payerPhone,
+			// payer's email address string
+			email: paymentResponse.payerEmail,
+			// payer's name string
+			name: paymentResponse.payerName
+		};
+		return fetch('/pay', {
+			method: 'POST',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			//body: JSON.stringify(paymentResponse.toJSON())
+			body: JSON.stringify(paymentData)
+		}).then(res => {
+			if (res.status === 200) {
+				return res.json();
+			} else {
+				throw 'Payment Error';
+			}
+		}).then(
+			res => {
+				// 사용자 상호작용이 끝났다는 것을 User Agent에 알리고, 앱이 사용자에게 결과를 통보하고, 나머지 UI 요소 처분을 처리할 수 있도록 허용
+				//if (res.success == true) {
+					//paymentResponse.complete("success"); 
+					paymentResponse.complete('success').then(() => {
+						// Success UI
+					});
+				//} else {
+					//return paymentResponse.complete('fail');
+				//}
+			}, 
+			err => {
+				//paymentResponse.complete("fail");
+				paymentResponse.complete('fail').then(() => {
+					// Error UI
+				});
+			}
+		).catch(() => {
+			return paymentResponse.complete('fail');
+		});
+	}).catch(err => {
+		console.error("Uh oh, something bad happened", err.message);
+	});
+
+	// 쇼핑 세션의 시간이 초과되거나 장바구니에 담은 품목이 트랜잭션 중에 매진 상태일 때
+	var paymentTimeout = window.setTimeout(function() {
+		window.clearTimeout(paymentTimeout);
+		// 요청을 중단하면 PaymentRequest의 새 인스턴스를 생성해야만 show()를 다시 호출할 수 있습니다.
+		request.abort().then(function() { // 요청 중단 
+			console.log('Payment timed out after 20 minutes.');
+		}).catch(function() {
+			console.log('Unable to abort.');
+		});
+	}, 20 * 60 * 1000);  /* 20 minutes */
+};
+
+// Assuming an anchor is the target for the event listener.
+document.querySelector('#start').addEventListener('click', onBuyClicked);
+</script>
+</body>
+</html>
